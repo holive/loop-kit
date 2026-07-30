@@ -78,12 +78,12 @@ read ~/projects/loop-kit/LOOP.md and fill in the spec for: <your task>
 It reads your repo and comes back with a filled-in plan, including which commands it
 found to use as the oracle.
 
-### Step 2 — check the commands, then say yes
+### Step 2 — check the FAIL rule, then say yes
 
-Look at the oracle commands it picked. Ask yourself: *can these actually fail?*
+Read what it wrote down as the failing result. Ask yourself: *could that actually happen?*
 
-If yes, approve. Once approved, they are frozen. The AI is not allowed to change them
-later. (See "Why freezing matters" below.)
+If yes, approve. Once approved, the oracle is frozen. The AI is not allowed to change it later.
+(See "Why freezing matters" below.)
 
 ### Step 3 — let it run, then read the notes
 
@@ -125,11 +125,62 @@ Answer these four. **If you answer no to #2, stop — don't loop it.**
 3. Can the AI do the whole thing, without handing half back to you?
 4. Is "done" a fact, not an opinion?
 
-Got 2 or 3 yeses? You can still loop the part that is factual, and keep the judgment
-part for yourself. That's normal and it's often the right answer.
+Got 2 or 3 yeses? You can still loop the part that is factual and keep the judgment part for
+yourself. That's normal, and often the right answer.
 
-Example: "is this claim true about the repo" is a fact -> loop it.
-"is this worth telling my teammate" is judgment -> you decide.
+### The rule of thumb
+
+> **Loop it when the work asserts things about state you can't see from where you're sitting.
+> Do it yourself when everything you need is in front of you.**
+
+That is the whole heuristic. A loop's advantage is not that it's smarter. It's that it will
+patiently check two hundred things against reality and write down what it found, including the
+boring ones you'd have skipped.
+
+### What loops are actually used for
+
+Every deployed example has the same shape: a cheap, mechanical verdict nobody can argue with.
+
+| Job | What says no |
+|---|---|
+| Overnight experimentation (`autoresearch`) | one metric from a fixed-length run |
+| Mathematical discovery (FunSearch) | a scoring function, run millions of times |
+| Fixing an issue from a bug report | the project's own test suite |
+| Fuzzing, property testing | it crashed, or an invariant broke |
+| Dependency upgrades, mass renames | build and tests still green |
+| Hunting an intermittent failure | run it 200 times, count |
+| Checking a document's claims | look each one up at the source |
+| Reconciling figures | the closed statement from last period |
+
+### Fits, and doesn't
+
+**Fits.** Verifying a document's claims against the systems it describes. Checking whether cited
+numbers, dates, versions and line references are still accurate. Cross-checking assertions about
+things you don't control. Conventions that exist but nothing enforces. Whether every change has
+something that fails when you undo it. Dead links and renamed things.
+
+**Doesn't.** Is this the right design. Is the name good. Should this be split up. Is it
+over-engineered. Should we ship it.
+
+Not because those are hard, but because nothing can say no to them.
+
+### The marginal case, and the trap in it
+
+Hunting for defects. There's a real oracle only if the loop is **required to produce something
+that fails** — a test, a query, a reproduction. If it can't, its findings are hypotheses, and
+they must be labelled that way.
+
+This is how most automated review fails. It emits a stack of confident, plausible findings with
+no oracle anywhere in the process, and plausible-and-wrong costs you more time than silence.
+
+### The one advantage worth building for
+
+**Decay.** Facts about systems you don't own go stale continuously and silently. In the run that
+this kit's rules came from, four claims flipped truth value while the work sat open, because
+upstream repositories moved underneath it. Nobody tracks that by hand across thirteen sources.
+
+Thoroughness is nice. Catching the thing that was true last week and isn't now is the part you
+can't do yourself.
 
 ---
 
@@ -180,10 +231,15 @@ Don't skip ahead. This is how loops burn money overnight.
 
 ## Is it working?
 
-One number matters: **how much of the output you keep.**
+Two numbers. Neither is tokens spent or rounds run.
 
-Not tokens spent. Not rounds run. If it gives you 10 things and you throw away 6, you
-are doing the reviewing it was supposed to save you.
+**How much of the output you keep.** If it gives you 10 things and you bin 6, you're doing the
+reviewing it was supposed to save you.
+
+**How much of the output a stranger could re-check.** Count the results whose verdict you could
+hand to someone else with just the recorded evidence. The run behind this kit came in at 71 of
+81, 88%. Track it per run. A later run coming in well below that means the oracle got softer,
+not that the work got harder.
 
 ---
 
