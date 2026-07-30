@@ -227,9 +227,9 @@ Not invented here. Each rule in `LOOP.md` carries its evidence inline. The sourc
   feedback. This is why fake oracles don't work.
 - **Same paper** — AI-debating-AI performs *worse* than simple voting at equal compute, which
   is why this recipe never tells you to have two AIs argue.
-- **One measured run of this template** — 65 claims, 5 rounds, 51 mechanical verdicts and 14
-  that needed hedging. Source of the per-row pinning rule, the lens rotation numbers, and the
-  admission that three verdict values weren't enough.
+- **One measured run of this template** — 81 rows, 6 rounds, 71 unambiguous verdicts and 7 that
+  needed a compound one. Source of the per-row pinning rule, the lens rotation numbers, the
+  88% health metric, and the admission that three verdict values weren't enough.
 
 Two ideas from earlier drafts (MAP-Elites diversity archives, UIST 2024 on criteria drift)
 are still in `LOOP.md`, but under "not yet exercised" — nothing here has tested them.

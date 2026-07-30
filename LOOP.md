@@ -6,7 +6,7 @@ Only the gate in section 0 is domain-neutral, and it is the only part that must 
 
 Provenance: Karpathy's `autoresearch` (92k stars, ~100 unattended experiments per night),
 Huang et al. ICLR 2024 (self-correction fails without external feedback), plus one measured
-run of this template, 65 claims over 5 rounds, cited inline where it earned a rule.
+run of this template, 81 rows over 6 rounds, cited inline where it earned a rule.
 
 ---
 
@@ -40,8 +40,10 @@ ORACLE                      # the gate. required. build this FIRST.
   FAIL looks like: <the literal output that means fail — write this before running>
   verdict values:  <allowed set. include partial, and require it to name which part>
   evidence path:   <what it may read to decide, independently of the worker>
+  if widened:      log the new source and re-run. A scope gap is not "cannot-establish".
   PROTECTED:       <files, prompts, commands the worker must never modify>
-  pinned at:       <SHA / version / timestamp — a recorded value, never "now">
+  pinned at:       <every source the evidence path can reach, not just the obvious ones.
+                    a recorded value, never "now">
 
 WORKER
   may edit:      <explicit allowlist>
@@ -83,7 +85,7 @@ Do not skip ahead. Scheduling something unproven by hand is how loops burn money
 
 ## 3. Invariants
 
-Eight rules. Each carries the symptom you get without it and the evidence for it. Nothing
+Nine rules. Each carries the symptom you get without it and the evidence for it. Nothing
 here is a preference.
 
 **1. The worker cannot touch the oracle.**
@@ -98,18 +100,24 @@ and picks a vocab-size-independent metric so architectural changes compare fairl
 **3. Prefer an oracle that needs no interpretation.** One number, one exact string, one match.
 If a model must read output and form a view, that row is judgment. Label it judgment.
 Symptom: confident convergence on a wrong answer.
-Evidence: measured run, 51 of 65 verdicts mechanical, 14 needed hedging. The hedged ones are
-exactly the ones a stranger cannot re-check.
+Evidence: measured run, 81 rows — 71 got a single unambiguous verdict, 7 needed a compound one
+naming which half held, 3 were cannot-establish. The compound rows are exactly the ones a
+stranger cannot re-check. **That ratio is the health metric: 71/81, 88%.** Track it per run.
+A later run coming in materially lower means the oracle got softer, not that the work got harder.
 
 **4. State lives in a file, outside the model and outside anything a revert can erase.**
 Symptom: round N repeats round 1; context regrows every round and cost blows out.
 Evidence: `autoresearch` keeps `results.tsv` untracked so the `git reset` that discards a failed
-experiment cannot erase the record of it. Measured run carried 66 rows across 5 rounds sharing
+experiment cannot erase the record of it. Measured run carried 81 rows across 6 rounds sharing
 no context.
 
-**5. Pin what you judged against, on every row.**
+**5. Pin what you judged against, on every row.** Enumerate every source the evidence path can
+reach, not just the obvious ones. Anything you judge against unpinned gets marked as an
+unpinned observation on that row.
 Symptom: two correct rounds disagree and you cannot tell which to believe.
 Evidence: measured run, four claims flipped truth value mid-loop because an upstream repo moved.
+The same run pinned four repos but reached service repos it never pinned, so a whole lens's rows
+carry unpinned SHAs. It said so, which is the minimum; enumerating up front is better.
 
 **6. Rotate the lens on purpose.** Framing variance is the engine of coverage, not noise.
 Symptom: high volume, narrow coverage. Every round finds the same class of thing.
@@ -125,6 +133,18 @@ items, and said so.
 Symptom: it stops after two rounds for reassurance, which is a conversation with extra steps.
 Evidence: `autoresearch` states it flatly — do not ask "should I keep going?", the human may be
 asleep, run until interrupted.
+
+**9. A count or an attribution is a claim. Re-derive it with a different query before recording it.**
+Symptom: a confident number that is quietly wrong, and stays wrong because it gets reused.
+Evidence: measured run, all three errors it caught in a prior review were of this shape — a site
+count derived from one grep pattern that missed the same term in prose, a date reused from
+memory, and a severity attributed to the wrong config file. None was a reasoning failure. Each
+was derived once and never re-derived.
+
+**Do not widen the evidence path silently, and do not accept a scope gap as an answer.** If a
+claim needs a source outside the stated path, add the source, log that you added it, and re-run.
+Evidence: the measured run recorded `cannot-establish` for a linter severity that one lookup in
+an unlisted third-party repo settled outright.
 
 Two mechanical notes. Raw oracle output goes to a file and is read back selectively, never
 streamed into context (`autoresearch`: redirect to `run.log`, do not `tee`). And a verdict may
