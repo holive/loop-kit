@@ -38,12 +38,18 @@ NOT GOAL:  <what this loop must not drift into>
 ORACLE                      # the gate. required. build this FIRST.
   verdict from:    <what produces the verdict>
   FAIL looks like: <the literal output that means fail — write this before running>
-  verdict values:  <allowed set. include partial, and require it to name which part>
+  verdict values:  <allowed set>. One value per row. Use partial ONLY when a claim has
+                   independent sub-assertions that genuinely differ, and name which half.
+                   A claim whose truth CHANGED over time is a single verdict at the pin
+                   plus `moved: yes` — never partial. Fix this convention before the first
+                   run or the health metric cannot be compared across runs.
   evidence path:   <what it may read to decide, independently of the worker>
   if widened:      log the new source and re-run. A scope gap is not "cannot-establish".
   PROTECTED:       <files, prompts, commands the worker must never modify>
   pinned at:       <every source the evidence path can reach, not just the obvious ones.
                     a recorded value, never "now">
+  worker pin:      <the model and harness running this, exact versions, written before
+                    round 1. Without it you cannot tell a spec change from a model change.>
 
 WORKER
   may edit:      <explicit allowlist>
@@ -51,8 +57,15 @@ WORKER
 
 LEDGER                      # external state. survives session death and any revert.
   path:          <file, outside anything the work itself can roll back>
-  records:       round, seen[], accepted[], rejected[+reason], oracle pin, spend
+  records:       round, seen[], accepted[], rejected[+reason], oracle pin, worker pin,
+                 moved flag, spend
   dedup key:     <what makes two candidates "the same">
+  corpus:        every source, listed by id, each with its running row count
+
+ROUND 0                     # once, before any work
+  write the worker pin. Verify every oracle pin resolves. Inventory the corpus: list each
+  source with a row count of 0. No run may stop with a source still at 0 unless the report
+  says so in words.
 
 ROUND
   1. read LEDGER; do not re-derive anything already in seen[]
@@ -66,9 +79,16 @@ STOP  (need at least success + hard cap)
   success:   <objective condition>
   dry:       K consecutive rounds with 0 fresh candidates (K = 2)
   hard cap:  <max rounds> or <max spend>, whichever hits first
-  on stop:   report accepted[], rejected[] with reasons, oracle pin,
-             and explicitly what was NOT covered
+  on stop:   report accepted[], rejected[] with reasons, oracle pin, worker pin,
+             the per-source row counts, and explicitly what was NOT covered.
+             Say which stop condition fired. Ending on the cap is not finishing.
 ```
+
+**One run is not exhaustive.** Both measured runs ended on the hard cap with the completeness
+lens still returning fresh items, and each found roughly 10 to 19 rows the other never saw. For
+anything that matters, run it twice with a fresh ledger and merge, then let the oracle settle the
+contradictions. Two runs disagreed on 6 of 50 overlapping claims; 5 of those 6 resolved in favour
+of the later run. Expect a second run to change your mind, not just pad the count.
 
 ---
 
@@ -100,10 +120,12 @@ and picks a vocab-size-independent metric so architectural changes compare fairl
 **3. Prefer an oracle that needs no interpretation.** One number, one exact string, one match.
 If a model must read output and form a view, that row is judgment. Label it judgment.
 Symptom: confident convergence on a wrong answer.
-Evidence: measured run, 81 rows — 71 got a single unambiguous verdict, 7 needed a compound one
-naming which half held, 3 were cannot-establish. The compound rows are exactly the ones a
-stranger cannot re-check. **That ratio is the health metric: 71/81, 88%.** Track it per run.
-A later run coming in materially lower means the oracle got softer, not that the work got harder.
+Evidence: run 1, 81 rows, 71 with a single unambiguous verdict. Run 2, 83 rows, 74 once scored by
+the same convention. **That ratio is the health metric: 88% and 89%.** Track it per run.
+A later run materially lower means the oracle got softer, not that the work got harder.
+Caveat the metric taught us about itself: run 2 first reported 78%, because it scored
+truth-changed-over-time as partial where run 1 scored it as a single verdict. Same work, eleven
+points apart. **The metric is worthless until the verdict convention above is fixed in writing.**
 
 **4. State lives in a file, outside the model and outside anything a revert can erase.**
 Symptom: round N repeats round 1; context regrows every round and cost blows out.
@@ -111,23 +133,29 @@ Evidence: `autoresearch` keeps `results.tsv` untracked so the `git reset` that d
 experiment cannot erase the record of it. Measured run carried 81 rows across 6 rounds sharing
 no context.
 
-**5. Pin what you judged against, on every row.** Enumerate every source the evidence path can
-reach, not just the obvious ones. Anything you judge against unpinned gets marked as an
-unpinned observation on that row.
-Symptom: two correct rounds disagree and you cannot tell which to believe.
-Evidence: measured run, four claims flipped truth value mid-loop because an upstream repo moved.
-The same run pinned four repos but reached service repos it never pinned, so a whole lens's rows
-carry unpinned SHAs. It said so, which is the minimum; enumerating up front is better.
+**5. Pin what you judged against, on every row. Pin the worker too.** Enumerate every source the
+evidence path can reach, not just the obvious ones. Anything judged against something unpinned is
+marked as an unpinned observation on that row. Record the model and harness before round 1.
+Symptom: two correct rounds disagree and you cannot tell which to believe, or whether the
+difference came from your spec or from a different model.
+Evidence: run 1 had four claims flip truth value mid-loop because an upstream repo moved, pinned
+four repos while reaching service repos it never pinned, and recorded no worker pin at all — so
+its comparison with run 2 carries a permanent asterisk. Run 2 pinned thirteen sources and its own
+model, and that is what let the two be compared.
 
 **6. Rotate the lens on purpose.** Framing variance is the engine of coverage, not noise.
 Symptom: high volume, narrow coverage. Every round finds the same class of thing.
 Evidence: measured run per lens — premise-truth 16, staleness 14, attribution 18, second-order
 16, what-is-missing 5. Each found a class the others missed.
 
-**7. Two stop conditions minimum, success and a hard cap. Then log what you did not cover.**
+**7. Two stop conditions minimum, success and a hard cap. Account for coverage per source, at
+the start and at the end.** A closing "what I did not cover" depends on noticing. A corpus
+inventory with row counts makes a gap visible while there is still time to fill it.
 Symptom: silent truncation, which reads as completeness.
-Evidence: measured run ended on the hard cap with the completeness lens still returning fresh
-items, and said so.
+Evidence: both measured runs ended on the hard cap with the completeness lens still returning
+fresh items, and said so. But run 2 also skipped an entire source file — four review comments it
+was handed and never rowed — and only discovered it when comparing against run 1. Nothing in the
+loop noticed at the time.
 
 **8. Never pause to ask whether to continue.**
 Symptom: it stops after two rounds for reassurance, which is a conversation with extra steps.
@@ -139,7 +167,9 @@ Symptom: a confident number that is quietly wrong, and stays wrong because it ge
 Evidence: measured run, all three errors it caught in a prior review were of this shape — a site
 count derived from one grep pattern that missed the same term in prose, a date reused from
 memory, and a severity attributed to the wrong config file. None was a reasoning failure. Each
-was derived once and never re-derived.
+was derived once and never re-derived. **This applies to the run's own closing report.** Run 2
+credited a rule with catching a bad SHA in the spec it was handed; the spec's SHA was correct and
+the run had introduced the typo itself, three rows earlier.
 
 **Do not widen the evidence path silently, and do not accept a scope gap as an answer.** If a
 claim needs a source outside the stated path, add the source, log that you added it, and re-run.

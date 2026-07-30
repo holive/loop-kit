@@ -237,9 +237,21 @@ Two numbers. Neither is tokens spent or rounds run.
 reviewing it was supposed to save you.
 
 **How much of the output a stranger could re-check.** Count the results whose verdict you could
-hand to someone else with just the recorded evidence. The run behind this kit came in at 71 of
-81, 88%. Track it per run. A later run coming in well below that means the oracle got softer,
-not that the work got harder.
+hand to someone else with just the recorded evidence. The two runs behind this kit came in at 88%
+and 89%. A later run well below that means the oracle got softer, not that the work got harder.
+
+One warning, learned the hard way: this number only compares across runs if you fix *how verdicts
+are named* first. Run 2 first reported 78% for work that was actually 89%, purely because it
+labelled "true then, false now" differently. Same work, eleven points apart.
+
+### Run it twice
+
+Both runs stopped because they hit the try limit, not because they finished, and each found
+roughly 10 to 19 things the other never saw. They also disagreed outright on 6 findings, and 5 of
+those 6 resolved in the second run's favour.
+
+So for anything that matters, run it twice from a clean slate and merge. Expect the second run to
+change your mind, not just add to the pile. One ledger is a good sample, not a complete answer.
 
 ---
 
