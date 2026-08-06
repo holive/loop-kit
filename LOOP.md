@@ -38,11 +38,16 @@ NOT GOAL:  <what this loop must not drift into>
 ORACLE                      # the gate. required. build this FIRST.
   verdict from:    <what produces the verdict>
   FAIL looks like: <the literal output that means fail — write this before running>
-  verdict values:  <allowed set>. One value per row. Use partial ONLY when a claim has
-                   independent sub-assertions that genuinely differ, and name which half.
-                   A claim whose truth CHANGED over time is a single verdict at the pin
-                   plus `moved: yes` — never partial. Fix this convention before the first
-                   run or the health metric cannot be compared across runs.
+  verdict values:  <a CLOSED set, written in Round 0, plus `does-not-fit`>. One value per
+                   row, and a row whose verdict is not in the set does not land — it is
+                   re-emitted or recorded as `does-not-fit`, never coerced into the nearest
+                   valid value. `does-not-fit` means: halt the round and flag for a human;
+                   it is how the schema admits it was wrong without being quietly widened.
+                   Use partial ONLY when a claim has independent sub-assertions that
+                   genuinely differ, and name which half. A claim whose truth CHANGED over
+                   time is a single verdict at the pin plus `moved: yes` — never partial.
+                   Fix all of this before the first run or the health metric cannot be
+                   compared across runs.
   evidence path:   <what it may read to decide, independently of the worker>
   if widened:      log the new source and re-run. A scope gap is not "cannot-establish".
   PROTECTED:       <files, prompts, commands the worker must never modify>
@@ -63,22 +68,29 @@ LEDGER                      # external state. survives session death and any rev
   corpus:        every source, listed by id, each with its running row count
 
 ROUND 0                     # once, before any work
-  write the worker pin. Verify every oracle pin resolves. Inventory the corpus: list each
-  source with a row count of 0. No run may stop with a source still at 0 unless the report
-  says so in words.
+  write the worker pin. Write the verdict schema: the closed value set and one line on
+  what each value means. Verify every oracle pin resolves. Inventory the corpus: list
+  each source with a row count of 0. No run may stop with a source still at 0 unless the
+  report says so in words.
 
 ROUND
-  1. read LEDGER; do not re-derive anything already in seen[]
+  1. read LEDGER; if round count or cumulative spend has reached the hard cap, stop NOW
+     and write the closing report — before producing anything. Do not re-derive anything
+     already in seen[]
   2. rotate the lens from last round: <lens A, lens B, lens C, ...>
   3. produce candidates
   4. dedup against seen[]        # NOT against accepted[]
   5. run ORACLE on each fresh candidate; capture its raw output to a file
-  6. append everything to LEDGER, including rejections and why
+  6. validate each row against the verdict schema, then append everything to LEDGER,
+     including rejections and why. An invalid row is re-emitted or lands as
+     `does-not-fit` — never silently fixed
 
 STOP  (need at least success + hard cap)
   success:   <objective condition>
   dry:       K consecutive rounds with 0 fresh candidates (K = 2)
-  hard cap:  <max rounds> or <max spend>, whichever hits first
+  hard cap:  <max rounds> or <max spend>, whichever hits first. Checked from the LEDGER
+             at the top of every round, never mid-work: a mid-round halt can land between
+             "oracle ran" and "row appended", or cut off the closing report
   on stop:   report accepted[], rejected[] with reasons, oracle pin, worker pin,
              the per-source row counts, and explicitly what was NOT covered.
              Say which stop condition fired. Ending on the cap is not finishing.
@@ -125,7 +137,12 @@ the same convention. **That ratio is the health metric: 88% and 89%.** Track it 
 A later run materially lower means the oracle got softer, not that the work got harder.
 Caveat the metric taught us about itself: run 2 first reported 78%, because it scored
 truth-changed-over-time as partial where run 1 scored it as a single verdict. Same work, eleven
-points apart. **The metric is worthless until the verdict convention above is fixed in writing.**
+points apart. **The metric is worthless until the verdict convention above is fixed as a closed,
+checkable value set in Round 0** — a row whose verdict is not in the set does not land, full
+stop. Prose ("use these values") is instruction; a set a row either matches or does not is
+construction. The set must include a `does-not-fit` escape that halts and flags rather than
+coercing: run 1 discovered mid-loop that three verdict values were not enough, and a schema
+with no exit would have buried that discovery inside the nearest valid value.
 
 **4. State lives in a file, outside the model and outside anything a revert can erase.**
 Symptom: round N repeats round 1; context regrows every round and cost blows out.
@@ -151,6 +168,9 @@ Evidence: measured run per lens — premise-truth 16, staleness 14, attribution 
 **7. Two stop conditions minimum, success and a hard cap. Account for coverage per source, at
 the start and at the end.** A closing "what I did not cover" depends on noticing. A corpus
 inventory with row counts makes a gap visible while there is still time to fill it.
+The cap is checked from the ledger at the top of each round, not obeyed mid-flight: a worker
+asked to "stop around N rounds" drifts past it, and a halt that lands mid-round truncates
+silently — between "oracle ran" and "row appended", or before the closing report gets written.
 Symptom: silent truncation, which reads as completeness.
 Evidence: both measured runs ended on the hard cap with the completeness lens still returning
 fresh items, and said so. But run 2 also skipped an entire source file — four review comments it
@@ -186,12 +206,22 @@ Carried from earlier drafts, untested by any run here. Untested is not wrong, bu
 these as load-bearing until something proves them.
 
 - Dedup against `seen[]`, never `accepted[]`, or rejected candidates return every round.
+  Corroborated since: Claude Code's Workflow orchestration docs state the same rule from
+  production use ("dedup vs seen, not confirmed — else judge-rejected findings reappear every
+  round and it never converges"). An independent design converging is not a test, but it is
+  no longer only ours.
 - No model-vs-model debate as the quality mechanism; at matched compute it underperforms plain
   majority voting (Huang et al.).
 - If a round evaluates earlier conclusions, write its own findings to disk *first*, then read
-  the prior ones, so agreement is costly.
+  the prior ones, so agreement is costly. Corroborated since: Workflow's multi-modal sweep
+  runs its searchers blind to each other and merges afterwards — the same instinct, enforced
+  structurally. Same caveat: corroboration, not a test.
 - Re-derive grading criteria as you see outputs rather than freezing them.
 - Track cost per accepted change, not tokens or rounds.
+- The two by-construction mechanisms above — the closed verdict schema with its
+  `does-not-fit` escape, and the cap checked from the ledger at round start — postdate both
+  measured runs. The failures they answer are measured; the mechanisms themselves have not
+  yet run.
 
 ---
 
@@ -209,6 +239,8 @@ ORACLE
   FAIL looks like: the grep returns no match, or returns a string other than the one the
                    claim asserts. Written down before round 1.
   verdict values:  confirmed | refuted | cannot-establish | partial(name which half)
+                   | does-not-fit(halt, flag for human). Closed set, written before round 1;
+                   a row with any other verdict does not land
   evidence path:   the repos themselves, read directly
   PROTECTED:       the claim list, this spec, the ledger's history
   pinned at:       one SHA per repo, in the ledger header AND on every row
@@ -223,7 +255,8 @@ LEDGER
   dedup key:     normalized claim text + the file:line it asserts about
 
 ROUND
-  1. read ledger; skip claims already resolved at the current pin
+  1. read ledger; stop and report if at 5 rounds. Skip claims already resolved at the
+     current pin
   2. rotate lens: [premise-truth, staleness, second-order-effects,
                    attribution, what-is-missing]
   3. produce or re-check claims under that lens
@@ -252,7 +285,8 @@ The only part you must not fake is the oracle.
 ```
 GOAL: <...>
 ORACLE: <what produces the verdict>. FAIL looks like: <write it now, before running>.
-        Paste raw output. Do not score your own work against a rubric.
+        Allowed verdicts: <a closed list, written now — any row outside it is a flag, not
+        a judgment call>. Paste raw output. Do not score your own work against a rubric.
 LEDGER: append each attempt and the raw output to <file> before continuing.
 ROUND: read the file, try something not already in it, run the oracle, append.
 STOP: oracle passes, or 5 rounds, or nothing new twice in a row.

@@ -102,6 +102,8 @@ If you just want the smallest possible version, paste this into any AI chat:
 GOAL: <what you want>
 
 ORACLE: <what produces the verdict>. FAIL looks like: <write this now>.
+        Allowed verdicts: <a short closed list, written now>. Anything that fits
+        none of them, record as "does-not-fit" and flag it — don't force it.
         Paste the raw output. Do not score yourself against a rubric.
 
 NOTES: before each new try, append what you tried and the raw output to
@@ -214,7 +216,8 @@ shrink. The cheat isn't banned, it's designed out. Aim for that when you can.
 | Confidently wrong, over and over | The oracle was another AI opinion | Use a real command |
 | Passes suspiciously fast | The oracle got changed | Freeze it, and check it wasn't edited |
 | Stops after two tries asking if it should go on | You didn't tell it not to | Add "don't stop to ask me" |
-| Huge bill, little output | No limit on tries | Always set a max number of tries |
+| Huge bill, little output | No limit on tries | Always set a max number of tries, and have it check the count in the notes file before each try, not "remember" it |
+| Two runs of the same loop score wildly differently | The verdict names drifted between runs | Fix a closed list of verdict names before round 1, with a "does not fit" escape |
 
 ---
 
@@ -243,6 +246,11 @@ and 89%. A later run well below that means the oracle got softer, not that the w
 One warning, learned the hard way: this number only compares across runs if you fix *how verdicts
 are named* first. Run 2 first reported 78% for work that was actually 89%, purely because it
 labelled "true then, false now" differently. Same work, eleven points apart.
+
+The fix is mechanical: before round 1, write the allowed verdict names as a closed list. A result
+that doesn't fit any of them gets recorded as "does not fit" and flagged for you — never squeezed
+into the nearest name. That last part matters: the first run discovered partway through that its
+verdict list was too small, and a list with no escape hatch would have hidden that.
 
 ### Run it twice
 
